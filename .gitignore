@@ -1,0 +1,10 @@
+api_key.txt
+*.tflite
+*.wasm
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+.venv/
+wasi_edge_impulse_onnx/target/
+wasi_edge_impulse_onnx/Cargo.lock
