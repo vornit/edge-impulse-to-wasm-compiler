@@ -25,7 +25,7 @@ RUN python3 -m venv /app/venv && \
 COPY . .
 
 # Aseta PYTHONPATH niin, että `valmis/app` löytyy
-ENV PYTHONPATH=/app/valmis
+ENV PYTHONPATH=/app/flask
 
 # Avaa Flaskin käyttämä portti
 EXPOSE 8080
