@@ -1,6 +1,7 @@
 api_key.txt
 *.tflite
 *.wasm
+*.onnx
 __pycache__/
 *.pyc
 .DS_Store
@@ -8,3 +9,4 @@ __pycache__/
 .venv/
 wasi_edge_impulse_onnx/target/
 wasi_edge_impulse_onnx/Cargo.lock
+temp/

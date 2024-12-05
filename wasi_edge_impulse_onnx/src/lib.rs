@@ -69,7 +69,7 @@ pub fn infer_predefined_paths() -> i32 {
         eprintln!("{:?}", file);
     }
 
-    match infer("edge-impulse-model.onnx".to_owned(), "accelerometer_data.csv".to_owned()) {
+    match infer("model.onnx".to_owned(), "accelerometer_data.csv".to_owned()) {
         Ok(probabilities) => {
             println!("Probabilities: {:?}", probabilities);
             0

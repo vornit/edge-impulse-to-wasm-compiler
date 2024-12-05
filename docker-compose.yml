@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  flask-app:
+    image: flask
+    build:
+      context: .  # Koko ui-kansio on rakennuskonteksti
+      dockerfile: Dockerfile  # Dockerfile on suoraan ui-kansiossa
+    container_name: flask-app
+    ports:
+      - "8080:8080"
+    networks:
+      - wasmiot-net
+    environment:
+      - PYTHONUNBUFFERED=1
+
+networks:
+  wasmiot-net:
+    external: true

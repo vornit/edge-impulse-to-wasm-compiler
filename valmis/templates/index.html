@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Run Pipeline</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <button id="run-pipeline-button">Run Pipeline</button>
+    <p id="response-message"></p>
+    <script>
+        $(document).ready(function () {
+            $("#run-pipeline-button").click(function () {
+                $.ajax({
+                    url: "/run_pipeline",
+                    type: "GET",
+                    success: function (response) {
+                        $("#response-message").text("Pipeline executed successfully!");
+                    },
+                    error: function (xhr, status, error) {
+                        $("#response-message").text("Pipeline execution failed. Check server logs for details.");
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
