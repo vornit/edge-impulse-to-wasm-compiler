@@ -60,7 +60,7 @@ def upload_wasm():
 
         with open(wasm_file_path, "rb") as wasm_file:
             files = {'file': ("wasi_mobilenet_onnx.wasm", wasm_file, "application/wasm")}
-            data_payload = {"name": "testi2"}
+            data_payload = {"name": "testi3"}
 
             response = requests.post(orchestrator_url, files=files, data=data_payload)
 
