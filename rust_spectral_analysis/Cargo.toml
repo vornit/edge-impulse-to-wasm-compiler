@@ -1,0 +1,12 @@
+[package]
+name = "spectral_analysis"
+version = "0.1.0"
+edition = "2018"
+
+[lib]
+name = "spectral_analysis"
+path = "src/lib.rs"
+#crate-type = ["cdylib"]
+
+[dependencies]
+rustfft = "6"

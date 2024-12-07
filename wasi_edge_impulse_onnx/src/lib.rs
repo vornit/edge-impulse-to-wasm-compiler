@@ -71,8 +71,16 @@ pub fn infer_predefined_paths() -> i32 {
 
     match infer("model.onnx".to_owned(), "accelerometer_data.csv".to_owned()) {
         Ok(probabilities) => {
+            // Tulosta todennäköisyydet
             println!("Probabilities: {:?}", probabilities);
-            0
+
+            // Etsi suurimman todennäköisyyden indeksi (oletettu luokka)
+            if let Some((index, _)) = probabilities.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()) {
+                return index as i32; // Palauta luokan indeksi
+            }
+
+            eprintln!("No probabilities found.");
+            -7 // Virhekoodi, jos todennäköisyyksiä ei löydy
         }
         Err(e) => {
             eprintln!("Error: {:?}", e);
