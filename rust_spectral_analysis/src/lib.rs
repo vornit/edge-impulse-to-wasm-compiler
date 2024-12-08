@@ -1,4 +1,5 @@
 use rustfft::{FftPlanner, num_complex::Complex};
+use std::io::Write;
 
 pub fn generate_features(
     implementation_version: i32,
@@ -21,7 +22,7 @@ pub fn generate_features(
     wavelet_level: i32,
     wavelet: String,
     extra_low_freq: bool,
-) -> i32 {
+) -> Vec<f64> {
     let mut fx: Vec<Vec<f64>> = vec![vec![], vec![], vec![]];
 
     // Split the data into three separate vectors
@@ -49,22 +50,25 @@ pub fn generate_features(
             .collect()
         ).collect();
 
-    for (i, axis_data) in fx.iter().enumerate() {
-        let (features, labels, spec_powers, freqs) = extract_spec_features(
-            axis_data,
-            sampling_freq,
-            fft_length as i32,
-            &filter_type,
-            filter_cutoff,
-            do_log,
-            do_fft_overlap,
-            true,
-            &axes[i],
-        );
-    }
+        let mut all_features: Vec<f64> = Vec::new();
 
-    0
-}
+        for (i, axis_data) in fx.iter().enumerate() {
+            let (features, _, _, _) = extract_spec_features(
+                axis_data,
+                sampling_freq,
+                fft_length as i32,
+                &filter_type,
+                filter_cutoff,
+                do_log,
+                do_fft_overlap,
+                true,
+                &axes[i],
+            );
+            all_features.extend(features);
+        }
+    
+        all_features
+    }
 
 fn extract_spec_features(
     fx: &Vec<f64>,
@@ -119,8 +123,6 @@ fn extract_spec_features(
     for i in 1..spec_powers.len() {
         features.push(spec_powers[i]);
     }
-
-    println!("Features: {:?}", features);
 
     // TODO: Implement labels if needed
     let labels = vec![format!("Dummy Label{}", suffix)];
@@ -218,4 +220,81 @@ fn zero_handling(x: &mut Vec<f64>) {
             *val = epsilon;
         }
     }
+}
+
+#[no_mangle]
+pub fn testailu() -> i32 {
+    let implementation_version = 4;
+    let draw_graphs = false;
+
+    let raw_data = vec![
+        -0.6300, 6.7400, 6.9600, -0.6300, 6.7300, 6.9600, -0.6500, 6.7200, 6.9600, -0.6400, 6.7300, 6.9800, -0.6300, 6.7300, 6.9900, -0.6300, 6.7100, 6.9900, -0.6200, 6.7200, 6.9800, -0.6300, 6.7200, 6.9700, -0.6300, 6.7100, 6.9800, -0.6200, 6.7200, 6.9700, -0.6200, 6.7300, 6.9600, -0.6300, 6.7300, 6.9700, -0.6200, 6.7300, 6.9800, -0.6300, 6.7300, 6.9800, -0.6400, 6.7200, 6.9700, -0.6300, 6.7200, 6.9900, -0.6300, 6.7200, 6.9700, -0.6300, 6.7200, 6.9800, -0.6300, 6.7200, 6.9700, -0.6400, 6.7100, 6.9600, -0.6200, 6.7300, 6.9800, -0.6200, 6.7200, 6.9600, -0.6200, 6.7300, 6.9600, -0.6200, 6.7100, 6.9800, -0.6200, 6.7200, 6.9700, -0.6400, 6.7300, 6.9800, -0.6500, 6.7300, 6.9800, -0.6400, 6.7200, 6.9800, -0.6400, 6.7200, 6.9700, -0.6400, 6.7200, 6.9600, -0.6300, 6.7200, 6.9700, -0.6300, 6.7200, 6.9700, -0.6300, 6.7300, 6.9600, -0.6100, 6.7100, 6.9700, -0.6200, 6.7300, 6.9700, -0.6200, 6.7200, 6.9700, -0.6300, 6.7200, 6.9800, -0.6400, 6.7200, 6.9800, -0.6500, 6.7100, 6.9700, -0.6400, 6.7100, 6.9800, -0.6300, 6.7200, 6.9800, -0.6400, 6.7300, 6.9900, -0.6300, 6.7100, 6.9700, -0.6200, 6.7200, 6.9700, -0.6100, 6.7100, 6.9700, -0.6200, 6.7300, 6.9700, -0.6400, 6.7300, 6.9700, -0.6400, 6.7200, 6.9800, -0.6400, 6.7100, 6.9700, -0.6400, 6.7200, 6.9900, -0.6400, 6.7100, 6.9900, -0.6400, 6.7200, 6.9800, -0.6400, 6.7200, 6.9800, -0.6200, 6.7200, 6.9700, -0.6200, 6.7200, 6.9800, -0.6200, 6.7300, 6.9700, -0.6200, 6.7300, 6.9800, -0.6400, 6.7000, 6.9800, -0.6200, 6.7200, 6.9800, -0.6400, 6.7000, 6.9700, -0.6400, 6.7000, 6.9900, -0.6400, 6.7100, 6.9700, -0.6400, 6.7100, 6.9700, -0.6300, 6.7200, 6.9800, -0.6300, 6.7200, 6.9700, -0.6200, 6.7100, 6.9700, -0.6200, 6.7200, 6.9700, -0.6200, 6.7100, 6.9700, -0.6300, 6.7200, 6.9800, -0.6300, 6.7200, 6.9700, -0.6200, 6.7200, 6.9700, -0.6300, 6.7200, 6.9700, -0.6400, 6.7200, 6.9800, -0.6500, 6.7100, 6.9700, -0.6400, 6.7300, 6.9900, -0.6200, 6.7100, 6.9800, -0.6400, 6.7000, 6.9700, -0.6300, 6.7100, 6.9800, -0.6300, 6.7100, 6.9800, -0.6300, 6.7100, 6.9700, -0.6200, 6.7300, 6.9900, -0.6200, 6.7300, 6.9700, -0.6400, 6.7100, 6.9600, -0.6400, 6.7200, 6.9900, -0.6200, 6.7200, 6.9800, -0.6300, 6.7200, 6.9800, -0.6200, 6.7100, 6.9700, -0.6400, 6.7000, 6.9800, -0.6300, 6.7100, 6.9700, -0.6400, 6.7000, 6.9700, -0.6300, 6.7200, 6.9700, -0.6300, 6.7100, 6.9700, -0.6200, 6.7200, 6.9800, -0.6200, 6.7200, 6.9800, -0.6400, 6.7100, 6.9700, -0.6300, 6.7100, 6.9900, -0.6400, 6.7200, 6.9800, -0.6400, 6.7100, 6.9800, -0.6300, 6.7300, 6.9800, -0.6200, 6.7200, 6.9800, -0.6400, 6.7100, 6.9800, -0.6300, 6.7200, 6.9700, -0.6300, 6.7100, 6.9800, -0.6200, 6.7200, 6.9700
+    ];
+
+    let axes = vec!["x".to_string(), "y".to_string(), "z".to_string()];
+    let sampling_freq = 52;
+    let scale_axes = 1;
+    let input_decimation_ratio = 1;
+    let filter_type = "none".to_string();
+    let filter_cutoff = 0.0;
+    let filter_order = 0;
+    let analysis_type = "fft".to_string();
+
+    let fft_length = 16;
+    let spectral_peaks_count = 0;
+    let spectral_peaks_threshold = 0;
+    let spectral_power_edges = "0".to_string();
+
+    let do_log = true;
+    let do_fft_overlap = true;
+    let extra_low_freq = false;
+
+    let wavelet_level = 3;
+    let wavelet = "haar".to_string();
+
+    // Generate features
+    let features = generate_features(
+        implementation_version,
+        draw_graphs,
+        raw_data,
+        axes,
+        sampling_freq,
+        scale_axes,
+        input_decimation_ratio,
+        filter_type,
+        filter_cutoff,
+        filter_order,
+        analysis_type,
+        fft_length,
+        spectral_peaks_count,
+        spectral_peaks_threshold,
+        spectral_power_edges,
+        do_log,
+        do_fft_overlap,
+        wavelet_level,
+        wavelet,
+        extra_low_freq,
+    );
+
+    // Save features to a file in a single line with comma-separated values
+    let file_path = "accelerometer_data.csv";
+    let Ok(mut output) = std::fs::File::create(file_path)
+        else { return SaveFeaturesError::FileCreationFailed as i32 };
+
+    let data: String = features
+        .iter()
+        .map(|f| format!("{:.4}", f)) // Muotoilu neljään desimaaliin
+        .collect::<Vec<String>>()
+        .join(", "); // Pilkku ja välilyönti erottimena
+
+    let Ok(_) = output.write_all(data.as_bytes())
+        else { return SaveFeaturesError::FileWriteFailed as i32 };
+
+    // Return 0 to indicate success
+    0
+}
+
+enum SaveFeaturesError {
+    FileCreationFailed = -1,
+    FileWriteFailed = -2,
 }
