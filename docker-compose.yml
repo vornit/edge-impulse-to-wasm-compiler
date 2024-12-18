@@ -4,8 +4,8 @@ services:
   flask-app:
     image: flask
     build:
-      context: .  # Koko ui-kansio on rakennuskonteksti
-      dockerfile: Dockerfile  # Dockerfile on suoraan ui-kansiossa
+      context: .
+      dockerfile: Dockerfile
     container_name: flask-app
     ports:
       - "8080:8080"
