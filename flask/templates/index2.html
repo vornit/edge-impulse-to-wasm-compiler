@@ -34,7 +34,7 @@
             fetch(`http://127.0.0.1:3000/execute/${lastDeployment}`, {
                 method: "POST",
                 body: formData,
-                mode: "no-cors" // Ohittaa CORS-politiikan
+                mode: "no-cors"
             })
                 .then(() => {
                     fetchText();

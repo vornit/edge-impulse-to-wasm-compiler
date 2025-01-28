@@ -2,7 +2,6 @@
 __pycache__/
 *.pyc
 .git/
-.dockerignore
 .venv/
 open-api-description.json
 wit
