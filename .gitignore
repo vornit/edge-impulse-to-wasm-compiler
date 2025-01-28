@@ -11,3 +11,6 @@ target/
 wasi_edge_impulse_onnx/Cargo.lock
 temp/
 Cargo.lock
+wit
+open-api-description.json
+raw_data.csv

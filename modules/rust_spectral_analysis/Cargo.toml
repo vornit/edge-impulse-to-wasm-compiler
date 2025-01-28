@@ -8,3 +8,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rustfft = "6"
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = "fat"
+codegen-units = 1

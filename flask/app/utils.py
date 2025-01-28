@@ -10,7 +10,7 @@ def pull_orchestrator_modules():
     if data := res.json():
         update_modules(data)
     else:
-        raise ValueError(f"Error getting modules from {url}")
+        print(f"No modules found at {url}")
 
 def pull_orchestrator_devices():
 
@@ -21,7 +21,7 @@ def pull_orchestrator_devices():
     if data := res.json():
         update_devices(data)
     else:
-        raise ValueError(f"Error getting devices from {url}")
+        print(f"No devices found at {url}")
     
 def pull_orchestrator_deployments():
 
@@ -32,4 +32,4 @@ def pull_orchestrator_deployments():
     if data := res.json():
         update_deployments(data)
     else:
-        raise ValueError(f"Error getting devices from {url}")
+        print(f"No deployments found at {url}")

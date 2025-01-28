@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, render_template_string
+from flask import Flask, render_template, jsonify, request, render_template_string, send_file
 from python_scripts.download_model import download_model
 from python_scripts.convert_to_onnx import convert_model
 import requests
@@ -8,16 +8,21 @@ from contextlib import contextmanager
 import os
 from .SETUP import MODULES, DEVICES, DEPLOYMENTS
 from .settings import WASMIOT_ORCHESTRATOR_URL
-from .utils import pull_orchestrator_modules
+from .utils import pull_orchestrator_modules, pull_orchestrator_devices, pull_orchestrator_deployments
+import csv
 
 #app.logger.info()
-
-LAST_DEPLOYMENT = None
 
 app = Flask(__name__, template_folder="../templates")
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+pull_orchestrator_devices()
+pull_orchestrator_modules()
+pull_orchestrator_deployments()
+
+LAST_DEPLOYMENT = None
 
 @contextmanager
 def change_directory(directory):
@@ -40,41 +45,34 @@ def modules2():
 def deployments2():    
     return jsonify(DEPLOYMENTS)
 
-@app.route("/debugging", methods=["GET"])
-def devices():    
-    a = []
-    id = None
-    for item in DEVICES:
-        if item.get("name") == "raspi1":
-            a.append(item.get("_id"))
-        if item.get("name") == "raspi2":
-            a.append(item.get("_id"))
-    return jsonify(a)
-
-@app.route("/")
-def index():
+@app.route('/', methods=["GET"])
+def index():        
     return render_template('index.html')
+
 
 @app.route("/run_pipeline", methods=["GET"])
 def run_pipeline():
     try:
+        pull_orchestrator_devices()
         download_model()
         convert_model()
-        run_rust_code("rust_spectral_analysis")
-        #run_rust_code("wasi_edge_impulse_onnx")
-        upload_wasm("model", "wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_mobilenet_onnx.wasm")
-        upload_wasm("spec", "rust_spectral_analysis/target/wasm32-wasi/release/spectral_analysis.wasm")
+        run_rust_code("modules/rust_spectral_analysis")
+        run_rust_code("modules/wasi_edge_impulse_onnx")
+        upload_wasm("model", "modules/wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm") # Make error handling!
+        upload_wasm("spec", "modules/rust_spectral_analysis/target/wasm32-wasi/release/spectral_analysis.wasm")
         pull_orchestrator_modules()
         add_model_desc()
         add_spectral_analysis_desc()
         do_deployment()
         deploy()
-        do_run()
+        pull_orchestrator_deployments()
+        #do_run()
 
         return "Pipeline executed successfully!", 200
     except Exception as e:
-        print(f"Pipeline failed: {e}")
-        return "Pipeline execution failed. Check server logs for details.", 500
+        error_message = f"Pipeline execution failed: {e}"
+        app.logger.error(error_message, exc_info=True)
+        return jsonify({"status": "error", "message": error_message}), 500
 
 def run_rust_code(rust_project_path):
 
@@ -120,22 +118,30 @@ def add_model_desc():
     url = f"http://172.17.0.1:3000/file/module/{model_id}/upload"
 
     data = {
-        "infer_predefined_paths[output]": (None, "integer"),
-        "infer_predefined_paths[mountName]": (None, "accelerometer_data.csv"),
-        "infer_predefined_paths[method]": (None, "POST"),
-        "infer_predefined_paths[stage]": (None, "execution"),
-        "infer_predefined_paths[mounts][0][name]": (None, "model.onnx"),
-        "infer_predefined_paths[mounts][0][stage]": (None, "deployment"),
-        "infer_predefined_paths[mounts][1][name]": (None, "accelerometer_data.csv"),
-        "infer_predefined_paths[mounts][1][stage]": (None, "execution")
+        "infer_predefined_paths[mountName]": "probabilities.csv",
+        "infer_predefined_paths[method]": "POST",
+        "infer_predefined_paths[stage]": "output",
+        "infer_predefined_paths[output]": "image/jpg",
+        "infer_predefined_paths[mounts][0][name]": "model.onnx",
+        "infer_predefined_paths[mounts][0][stage]": "deployment",
+        "infer_predefined_paths[mounts][1][name]": "accelerometer_data.csv",
+        "infer_predefined_paths[mounts][1][stage]": "execution",
+        "infer_predefined_paths[mounts][2][name]": "probabilities.csv",
+        "infer_predefined_paths[mounts][2][stage]": "output",
     }
 
     try:
         files = {
-            "model.onnx": ("edge-impulse-model.onnx", open("wasi_edge_impulse_onnx/edge-impulse-model.onnx", "rb"), "application/octet-stream")
+            "model.onnx": (
+                "model.onnx",
+                open("modules/wasi_edge_impulse_onnx/model.onnx", "rb"),
+                "application/octet-stream"
+            ),
+            "accelerometer_data.csv": (None, "undefined"),
+            "probabilities.csv": (None, "undefined")
         }
 
-        response = requests.post(url, files={**data, **files})
+        response = requests.post(url, files=files, data=data)
 
         if response.status_code == 200:
             return f"Request succeeded: {response.text}", 200
@@ -161,22 +167,31 @@ def add_spectral_analysis_desc():
     url = f"http://172.17.0.1:3000/file/module/{spec_id}/upload"
 
     data = {
-        "testailu[mountName]": (None, "accelerometer_data.csv"),
-        "testailu[method]": (None, "GET"),
-        "testailu[stage]": (None, "output"),
-        "testailu[output]": (None, "image/jpg"),
-        "testailu[mounts][0][name]": (None, "accelerometer_data.csv"),
-        "testailu[mounts][0][stage]": (None, "output"),
-        "accelerometer_data.csv": (None, "undefined")
+        "testailu[mountName]": "accelerometer_data.csv",
+        "testailu[method]": "POST",
+        "testailu[stage]": "output",
+        "testailu[output]": "image/jpg",
+        "testailu[mounts][0][name]": "raw_data.csv",
+        "testailu[mounts][0][stage]": "execution",
+        "testailu[mounts][1][name]": "accelerometer_data.csv",
+        "testailu[mounts][1][stage]": "output",
     }
 
     try:
-        response = requests.post(url, files=data)
+        files = {
+            "raw_data.csv": (None, "undefined"),
+            "accelerometer_data.csv": (None, "undefined"),
+        }
+
+        response = requests.post(url, data=data, files=files)
 
         if response.status_code == 200:
             return f"Request succeeded: {response.text}", 200
         else:
             return f"Request failed with status code {response.status_code}: {response.text}", response.status_code
+
+    except FileNotFoundError as e:
+        return f"File not found: {str(e)}", 500
 
     except Exception as e:
         return f"An error occurred: {str(e)}", 500
@@ -193,9 +208,9 @@ def do_deployment():
     raspi2 = None
 
     for item in DEVICES:
-        if item.get("name") == "raspi1":
+        if item.get("name") == "debug-thingi1":
             raspi1 = item.get("_id")
-        if item.get("name") == "raspi2":
+        if item.get("name") == "debug-thingi2":
             raspi2 = item.get("_id")
 
     model_id = None
@@ -266,7 +281,6 @@ def do_run():
         response = requests.post(url, data=data)
 
         if response.status_code in [200, 201]:
-            app.logger.info(response.text)
             return f"Request succeeded: {response.text}", response.status_code
         else:
             return f"Request failed with status code {response.status_code}: {response.text}", response.status_code
@@ -314,16 +328,52 @@ def file_structure():
     
     return render_template("file_structure.html", structure=structure)
 
-    #miten edge impulse mallit soveltuvat käytettäväksi liquidAI:n arkkitehtuurilla?
 
-    # prosessointiblokin muuttaminen rustiksi
-    # ja sellaseen muotoon että se toimii
-    # orkestraattorilla 
-    # tutkimuskysymyksiin: mitä oletin
-    # pitää alkaa tehdä implementointiosiota
-    # pohdintaosio: pitää peilata taakse päin
+@app.route('/upload', methods=['GET'])
+def upload_page():
+    global LAST_DEPLOYMENT
 
-    # jos jotain ei voi toteuttaa, niin voi perustella ettei mene gradun tavoiteaikaan
+    for item in DEPLOYMENTS:
+        if item.get("name") == "asd1233":
+            LAST_DEPLOYMENT = item.get("_id")
+            break
+    
+    return render_template('index2.html', last_deployment=LAST_DEPLOYMENT)
 
 
-    5555
+@app.route('/csv')
+def display_csv_as_text():
+    csv_url = 'http://172.15.0.4:5000/module_results/model/probabilities.csv'
+    
+    try:
+        response = requests.get(csv_url)
+        response.raise_for_status()
+        
+        csv_content = response.text.splitlines()
+        csv_reader = csv.reader(csv_content)
+        
+        data = [float(cell) for row in csv_reader for cell in row]
+        
+        return f"[{', '.join(map(str, data))}]"
+    
+    except requests.exceptions.RequestException as e:
+        return f"Virhe ladattaessa CSV-tiedostoa: {e}", 500
+
+
+@app.route('/get_text', methods=['GET'])
+def get_text():
+    csv_url = 'http://172.15.0.4:5000/module_results/model/probabilities.csv'
+    
+    try:
+        response = requests.get(csv_url)
+        response.raise_for_status()
+        
+        csv_content = response.text.splitlines()
+        csv_reader = csv.reader(csv_content)
+        
+        data = [float(cell) for row in csv_reader for cell in row]
+
+        return f"[{', '.join(map(str, data))}]"
+    
+    except requests.exceptions.RequestException as e:
+        return f"Virhe ladattaessa CSV-tiedostoa: {e}", 500

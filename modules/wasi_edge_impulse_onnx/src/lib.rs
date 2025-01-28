@@ -1,6 +1,6 @@
 use tract_onnx::{self as tonnx, prelude::{self as tp, Framework, InferenceModelExt, Tensor, tvec}};
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 
 #[derive(Debug)]
 pub enum E {
@@ -65,22 +65,46 @@ pub fn infer(model_path: String, data_path: String) -> Result<Vec<f32>, E> {
 
 #[no_mangle]
 pub fn infer_predefined_paths() -> i32 {
+    // Iterate through files in the current directory (for debugging)
     for file in std::fs::read_dir(".").unwrap() {
         eprintln!("{:?}", file);
     }
 
+    // Call infer and handle results
     match infer("model.onnx".to_owned(), "accelerometer_data.csv".to_owned()) {
         Ok(probabilities) => {
-            // Tulosta todennäköisyydet
             println!("Probabilities: {:?}", probabilities);
 
-            // Etsi suurimman todennäköisyyden indeksi (oletettu luokka)
-            if let Some((index, _)) = probabilities.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()) {
-                return index as i32; // Palauta luokan indeksi
+            // Save probabilities to a file
+            let file_path = "probabilities.csv";
+            let Ok(mut output) = File::create(file_path) else {
+                eprintln!("Failed to create file: {}", file_path);
+                return -8; // Return error code if file creation fails
+            };
+
+            // Write probabilities to the file as comma-separated values
+            let data: String = probabilities
+                .iter()
+                .map(|p| format!("{:.4}", p))
+                .collect::<Vec<String>>()
+                .join(", ");
+
+            if output.write_all(data.as_bytes()).is_err() {
+                eprintln!("Failed to write to file: {}", file_path);
+                return -9; // Return error code if file write fails
+            }
+
+            // Find the index of the maximum probability
+            if let Some((index, _)) = probabilities
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            {
+                return index as i32; // Return the index of the maximum probability
             }
 
             eprintln!("No probabilities found.");
-            -7 // Virhekoodi, jos todennäköisyyksiä ei löydy
+            -7 // Return -7 if no probabilities exist
         }
         Err(e) => {
             eprintln!("Error: {:?}", e);
@@ -92,6 +116,6 @@ pub fn infer_predefined_paths() -> i32 {
                 E::Run => -5,
                 E::Conversion => -6,
             }
-        },
+        }
     }
 }

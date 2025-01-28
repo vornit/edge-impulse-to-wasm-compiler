@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload CSV File</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+
+<body>
+    <h1>Upload CSV File</h1>
+    <p>Select a CSV file and click the button to upload it to the endpoint.</p>
+
+    <input type="file" id="csv-file" accept=".csv">
+    <button id="upload-button">Upload File</button>
+    <p id="response-message"></p>
+    <p id="output"></p>
+
+    <script>
+        const lastDeployment = "{{ last_deployment }}";
+
+        document.getElementById("upload-button").addEventListener("click", function () {
+            const fileInput = document.getElementById("csv-file");
+            if (!fileInput.files.length) {
+                document.getElementById("response-message").textContent = "Please select a CSV file before uploading.";
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append("raw_data.csv", file);
+
+            fetch(`http://127.0.0.1:3000/execute/${lastDeployment}`, {
+                method: "POST",
+                body: formData,
+                mode: "no-cors" // Ohittaa CORS-politiikan
+            })
+                .then(() => {
+                    fetchText();
+                })
+                .catch((error) => {
+                    document.getElementById("response-message").textContent = "File upload failed: " + error.message;
+                });
+        });
+
+        async function fetchText() {
+            try {
+                const response = await fetch('/get_text');
+                if (response.ok) {
+                    const text = await response.text();
+                    document.getElementById('output').textContent = text;
+                } else {
+                    document.getElementById('output').textContent = 'Error: ' + response.status;
+                }
+            } catch (error) {
+                document.getElementById('output').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+
+    Last deployment: {{ last_deployment }}
+</body>
+</html>

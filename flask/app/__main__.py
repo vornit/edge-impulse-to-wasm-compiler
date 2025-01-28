@@ -4,8 +4,8 @@ from .utils import pull_orchestrator_modules, pull_orchestrator_devices, pull_or
 if __name__ == "__main__":
 
     try:
-        pull_orchestrator_modules()
         pull_orchestrator_devices()
+        pull_orchestrator_modules()
         pull_orchestrator_deployments()
     except:
         pass

@@ -1,7 +1,0 @@
-package example:wasi-mobilenet-inference-world
-
-world wasi-mobilenet-inference-world {
-  type file-path = string
-
-  export infer: func(model-path: file-path, image-path: file-path) -> option<u32>
-}
