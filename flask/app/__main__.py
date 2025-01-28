@@ -1,5 +1,4 @@
 from .app import app
-import sys
 from .utils import pull_orchestrator_modules, pull_orchestrator_devices, pull_orchestrator_deployments
 if __name__ == "__main__":
 

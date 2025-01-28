@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, render_template_string, send_file
+from flask import Flask, render_template, jsonify, request, stream_with_context, Response
 from python_scripts.download_model import download_model
 from python_scripts.convert_to_onnx import convert_model
 import requests
@@ -23,6 +23,77 @@ pull_orchestrator_modules()
 pull_orchestrator_deployments()
 
 LAST_DEPLOYMENT = None
+
+progress_log = {}
+
+def update_progress_log(step):
+    global progress_log
+    progress_log[step] = True
+    return f"data: {step}\n\n"
+
+
+@app.route("/run_pipeline_progress", methods=["GET"])
+def run_pipeline_progress():
+    def generate():
+        global progress_log
+        progress_log = {
+            "download_model": False,
+            "convert_model": False,
+            "run_rust_spectral_analysis": False,
+            "run_rust_model": False,
+            "upload_wasm_model": False,
+            "upload_wasm_spec": False,
+            "add_model_desc": False,
+            "add_spectral_analysis_desc": False,
+            "do_deployment": False,
+            "deploy": False,
+        }
+
+        try:
+            pull_orchestrator_devices()
+
+            yield update_progress_log("download_model")
+            download_model()
+
+            yield update_progress_log("convert_model")
+            convert_model()
+
+            yield update_progress_log("run_rust_spectral_analysis")
+            if not os.path.exists("modules/rust_spectral_analysis/target/wasm32-wasi/release/spectral_analysis.wasm"):
+                run_rust_code("modules/rust_spectral_analysis")
+
+            yield update_progress_log("run_rust_model")
+            if not os.path.exists("modules/wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm"):
+                run_rust_code("modules/wasi_edge_impulse_onnx")
+
+            yield update_progress_log("upload_wasm_model")
+            upload_wasm("model", "modules/wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm")
+
+            yield update_progress_log("upload_wasm_spec")
+            upload_wasm("spec", "modules/rust_spectral_analysis/target/wasm32-wasi/release/spectral_analysis.wasm")
+
+            pull_orchestrator_modules()
+
+            yield update_progress_log("add_model_desc")
+            add_model_desc()
+
+            yield update_progress_log("add_spectral_analysis_desc")
+            add_spectral_analysis_desc()
+
+            yield update_progress_log("do_deployment")
+            do_deployment()
+
+            yield update_progress_log("deploy")
+            deploy()
+
+            pull_orchestrator_deployments()
+
+            yield "event: end\ndata: Pipeline executed successfully!\n\n"
+
+        except Exception as e:
+            yield f"event: error\ndata: Pipeline execution failed: {e}\n\n"
+
+    return Response(stream_with_context(generate()), content_type="text/event-stream")
 
 @contextmanager
 def change_directory(directory):
@@ -49,7 +120,6 @@ def deployments2():
 def index():        
     return render_template('index.html')
 
-
 @app.route("/run_pipeline", methods=["GET"])
 def run_pipeline():
     try:
@@ -58,7 +128,7 @@ def run_pipeline():
         convert_model()
         run_rust_code("modules/rust_spectral_analysis")
         run_rust_code("modules/wasi_edge_impulse_onnx")
-        upload_wasm("model", "modules/wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm") # Make error handling!
+        upload_wasm("model", "modules/wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm") # TODO: Make error handling!
         upload_wasm("spec", "modules/rust_spectral_analysis/target/wasm32-wasi/release/spectral_analysis.wasm")
         pull_orchestrator_modules()
         add_model_desc()
@@ -340,7 +410,6 @@ def upload_page():
     
     return render_template('index2.html', last_deployment=LAST_DEPLOYMENT)
 
-
 @app.route('/csv')
 def display_csv_as_text():
     csv_url = 'http://172.15.0.4:5000/module_results/model/probabilities.csv'
@@ -358,7 +427,6 @@ def display_csv_as_text():
     
     except requests.exceptions.RequestException as e:
         return f"Virhe ladattaessa CSV-tiedostoa: {e}", 500
-
 
 @app.route('/get_text', methods=['GET'])
 def get_text():

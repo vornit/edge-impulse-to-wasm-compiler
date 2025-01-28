@@ -8,21 +8,45 @@
 </head>
 <body>
     <button id="run-pipeline-button">Run Pipeline</button>
+    <ul id="progress-log">
+        <li id="download_model">Download model</li>
+        <li id="convert_model">Convert model</li>
+
+        <li id="run_rust_spectral_analysis">Convert Rust to Wasm (spectral analysis)</li>
+        <li id="run_rust_model">Convert Rust to Wasm (classifier)</li>
+
+        <li id="upload_wasm_model">Upload spectral analysis module to orchestrator</li>
+        <li id="upload_wasm_spec">Upload classifier module to orchestrator</li>
+        <li id="add_model_desc">Add classifier description</li>
+        <li id="add_spectral_analysis_desc">Add spectral analysis description</li>
+        <li id="do_deployment">Do deployment</li>
+        <li id="deploy">Deploy</li>
+    </ul>
     <p id="response-message"></p>
-    <form method="GET">
-    </form>
+
     <script>
         $(document).ready(function () {
             $("#run-pipeline-button").click(function () {
-                $.ajax({
-                    url: "/run_pipeline",
-                    type: "GET",
-                    success: function (response) {
-                        $("#response-message").text("Pipeline executed successfully!");
-                    },
-                    error: function (xhr, status, error) {
-                        $("#response-message").text("Pipeline execution failed. Check server logs for details.");
-                    }
+                $("#progress-log li").each(function () {
+                    $(this).text($(this).text().replace(" ✅", ""));
+                });
+                $("#response-message").text("");
+
+                const eventSource = new EventSource("/run_pipeline_progress");
+
+                eventSource.onmessage = function (event) {
+                    const stepId = event.data;
+                    $("#" + stepId).append(" ✅");
+                };
+
+                eventSource.addEventListener("end", function (event) {
+                    $("#response-message").text(event.data);
+                    eventSource.close();
+                });
+
+                eventSource.addEventListener("error", function (event) {
+                    $("#response-message").text("Error: " + event.data);
+                    eventSource.close();
                 });
             });
         });
