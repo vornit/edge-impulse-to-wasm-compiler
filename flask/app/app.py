@@ -15,7 +15,7 @@ import csv
 
 app = Flask(__name__, template_folder="../templates")
 
-logging.basicConfig(level=logging.DEBUG)  # Tämä varmistaa, että kaikki lokiviestit näkyvät
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -56,60 +56,117 @@ def run_pipeline_progress():
         try:
             pull_orchestrator_devices()
 
-            yield update_progress_log("download_model")
             download_model()
+            yield update_progress_log("download_model")
 
-            yield update_progress_log("convert_model")
             convert_model()
+            yield update_progress_log("convert_model")
 
-
-            yield update_progress_log("run_rust_spectral_analysis")
             if not os.path.exists("modules/target/wasm32-wasi/release/spectral_analysis.wasm"):
                 run_rust_code("modules/rust_spectral_analysis")
+            yield update_progress_log("run_rust_spectral_analysis")
 
-            yield update_progress_log("run_rust_model")
             if not os.path.exists("modules/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm"):
                 run_rust_code("modules/wasi_edge_impulse_onnx")
+            yield update_progress_log("run_rust_model")
 
-            yield update_progress_log("run_save_data")
-            if not os.path.exists("modules/target/wasm32-wasi/release/save_accelerometer_data.wasm.wasm"):
+            if not os.path.exists("modules/target/wasm32-wasi/release/save_accelerometer_data.wasm"):
                 run_rust_code("modules/save_accelerometer_data")
+            yield update_progress_log("run_save_data")
 
-
-            yield update_progress_log("upload_wasm_model")
             upload_wasm("model", "modules/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm")
+            yield update_progress_log("upload_wasm_model")
 
-            yield update_progress_log("upload_wasm_spec")
             upload_wasm("spec", "modules/target/wasm32-wasi/release/spectral_analysis.wasm")
+            yield update_progress_log("upload_wasm_spec")
 
-            yield update_progress_log("upload_save_data")
             upload_wasm("save", "modules/target/wasm32-wasi/release/save_accelerometer_data.wasm")
+            yield update_progress_log("upload_save_data")
 
             pull_orchestrator_modules()
 
+            add_desc(
+                "model",
+                {
+                    "model.onnx": (
+                        "model.onnx",
+                        open("modules/wasi_edge_impulse_onnx/model.onnx", "rb"),
+                        "application/octet-stream"
+                    ),
+                    "accelerometer_data.csv": (None, "undefined"),
+                    "probabilities.csv": (None, "undefined")
+                },
+                {
+                    "infer_predefined_paths[mountName]": "probabilities.csv",
+                    "infer_predefined_paths[method]": "POST",
+                    "infer_predefined_paths[stage]": "output",
+                    "infer_predefined_paths[output]": "image/jpg",
+                    "infer_predefined_paths[mounts][0][name]": "model.onnx",
+                    "infer_predefined_paths[mounts][0][stage]": "deployment",
+                    "infer_predefined_paths[mounts][1][name]": "features.csv",
+                    "infer_predefined_paths[mounts][1][stage]": "execution",
+                    "infer_predefined_paths[mounts][2][name]": "probabilities.csv",
+                    "infer_predefined_paths[mounts][2][stage]": "output",
+                }
+            )
             yield update_progress_log("add_model_desc")
-            add_model_desc()
 
+            add_desc(
+                "spec",
+                {
+                    "raw_data.csv": (None, "undefined"),
+                    "accelerometer_data.csv": (None, "undefined"),
+                },
+                {
+                    "testailu[mountName]": "features.csv",
+                    "testailu[method]": "POST",
+                    "testailu[stage]": "output",
+                    "testailu[output]": "image/jpg",
+                    "testailu[mounts][0][name]": "accelerometer_data.csv",
+                    "testailu[mounts][0][stage]": "execution",
+                    "testailu[mounts][1][name]": "features.csv",
+                    "testailu[mounts][1][stage]": "output",
+                }
+            )
             yield update_progress_log("add_spectral_analysis_desc")
-            add_spectral_analysis_desc()
-
+#
+            add_desc(
+                "save",
+                {
+                    "accelerometer_data.csv": (None, "undefined"),
+                },
+                {
+                    "save_sensor_data[mountName]": "accelerometer_data.csv",
+                    "save_sensor_data[method]": "GET",
+                    "save_sensor_data[stage]": "output",
+                    "save_sensor_data[output]": "image/jpg",
+                    "alloc[param0]": "integer",
+                    "alloc[output]": "integer",
+                    "alloc[mountName]": "",
+                    "alloc[method]": "GET",
+                    "save_sensor_data[mounts][0][name]": "accelerometer_data.csv",
+                    "save_sensor_data[mounts][0][stage]": "output",
+                }
+            )
             yield update_progress_log("add_save_data_desc")
-            add_save_data_desc()
 
-            yield update_progress_log("do_deployment")
             do_deployment()
+            yield update_progress_log("do_deployment")
 
-            yield update_progress_log("deploy")
             deploy()
+            yield update_progress_log("deploy")
 
             pull_orchestrator_deployments()
 
             yield "event: end\ndata: Pipeline executed successfully!\n\n"
 
         except Exception as e:
+            error_step = [step for step, completed in progress_log.items() if not completed][0]
+            yield f"event: fail\ndata: {error_step}\n\n"
             yield f"event: error\ndata: Pipeline execution failed: {e}\n\n"
 
     return Response(stream_with_context(generate()), content_type="text/event-stream")
+
 
 @contextmanager
 def change_directory(directory):
@@ -120,216 +177,101 @@ def change_directory(directory):
     finally:
         os.chdir(original_directory)
 
+
 @app.route("/devices", methods=["GET"])
 def devices2():    
     return jsonify(DEVICES)
+
 
 @app.route("/modules", methods=["GET"])
 def modules2():    
     return jsonify(MODULES)
 
+
 @app.route("/deployments", methods=["GET"])
 def deployments2():    
     return jsonify(DEPLOYMENTS)
+
 
 @app.route('/', methods=["GET"])
 def index():        
     return render_template('index.html')
 
-#@app.route("/run_pipeline", methods=["GET"])
-#def run_pipeline():
-#    try:
-#        pull_orchestrator_devices()
-#        download_model()
-#        convert_model()
-#        run_rust_code("modules/rust_spectral_analysis")
-#        run_rust_code("modules/wasi_edge_impulse_onnx")
-#        upload_wasm("model", "modules/wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm") # TODO: Make error handling!
-#        upload_wasm("spec", "modules/rust_spectral_analysis/target/wasm32-wasi/release/spectral_analysis.wasm")
-#        pull_orchestrator_modules()
-#        add_model_desc()
-#        add_spectral_analysis_desc()
-#        do_deployment()
-#        deploy()
-#        pull_orchestrator_deployments()
-#        #do_run()
-#
-#        return "Pipeline executed successfully!", 200
-#    except Exception as e:
-#        error_message = f"Pipeline execution failed: {e}"
-#        app.logger.error(error_message, exc_info=True)
-#        return jsonify({"status": "error", "message": error_message}), 500
 
 def run_rust_code(rust_project_path):
-
     with change_directory(rust_project_path):
         build_result = subprocess.run(["cargo", "build", "--target", "wasm32-wasi", "--release"], capture_output=True, text=True)
+        
         if build_result.returncode != 0:
-            print("Rust build failed:")
-            print(build_result.stderr)
-            return False
+            error_message = f"Rust build failed in {rust_project_path}:\n{build_result.stderr}"
+            print(error_message)
+            raise Exception(error_message)
 
-        print("Rust build succeeded.")
+        print(f"Rust build succeeded in {rust_project_path}.")
         print(build_result.stdout)
-        return True
+
 
 def upload_wasm(name, wasm_file_path):
     try:
-        #wasm_file_path = "wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_mobilenet_onnx.wasm"
-
         with open(wasm_file_path, "rb") as wasm_file:
-            files = {'file': ("wasi_mobilenet_onnx.wasm", wasm_file, "application/wasm")}
+            files = {'file': (os.path.basename(wasm_file_path), wasm_file, "application/wasm")}
             data_payload = {"name": name}
 
             response = requests.post(WASMIOT_ORCHESTRATOR_URL + '/file/module', files=files, data=data_payload)
 
             if response.status_code in (200, 201):
-                return jsonify({"status": "success", "message": response.text})
+                print(f"Successfully uploaded {name} to orchestrator.")
             else:
-                return jsonify({"status": "fail", "message": f"Failed to reach orchestrator. Status code: {response.status_code}"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Error communicating with orchestrator: {e}"})
+                error_message = f"Failed to upload {name}: Status code {response.status_code}, {response.text}"
+                print(error_message)
+                raise Exception(error_message)
 
-#@app.route("/add_module_desc", methods=["GET", "POST"])
-def add_model_desc():
-    model_id = None
+    except FileNotFoundError:
+        error_message = f"WASM file not found: {wasm_file_path}"
+        print(error_message)
+        raise Exception(error_message)
+
+    except Exception as e:
+        error_message = f"Error uploading {name}: {e}"
+        print(error_message)
+        raise Exception(error_message)
+
+
+def add_desc(module_name, files, data):
+    module_id = None
     for item in MODULES:
-        if item.get("name") == "model":
-            model_id = item.get("_id")
+        if item.get("name") == module_name:
+            module_id = item.get("_id")
             break
 
-    if not model_id:
-        return "Model ID not found", 404
+    if not module_id:
+        error_message = f"Module ID for '{module_name}' not found"
+        print(error_message)
+        raise Exception(error_message)
 
-    url = f"http://172.17.0.1:3000/file/module/{model_id}/upload"
-
-    data = {
-        "infer_predefined_paths[mountName]": "probabilities.csv",
-        "infer_predefined_paths[method]": "POST",
-        "infer_predefined_paths[stage]": "output",
-        "infer_predefined_paths[output]": "image/jpg",
-        "infer_predefined_paths[mounts][0][name]": "model.onnx",
-        "infer_predefined_paths[mounts][0][stage]": "deployment",
-        "infer_predefined_paths[mounts][1][name]": "features.csv",
-        "infer_predefined_paths[mounts][1][stage]": "execution",
-        "infer_predefined_paths[mounts][2][name]": "probabilities.csv",
-        "infer_predefined_paths[mounts][2][stage]": "output",
-    }
+    url = f"http://172.17.0.1:3000/file/module/{module_id}/upload"
 
     try:
-        files = {
-            "model.onnx": (
-                "model.onnx",
-                open("modules/wasi_edge_impulse_onnx/model.onnx", "rb"),
-                "application/octet-stream"
-            ),
-            "accelerometer_data.csv": (None, "undefined"),
-            "probabilities.csv": (None, "undefined")
-        }
-
         response = requests.post(url, files=files, data=data)
 
         if response.status_code == 200:
-            return f"Request succeeded: {response.text}", 200
+            print(f"Module description for '{module_name}' added successfully: {response.text}")
         else:
-            return f"Request failed with status code {response.status_code}: {response.text}", response.status_code
+            error_message = f"Failed to add module description for '{module_name}': Status code {response.status_code}, {response.text}"
+            print(error_message)
+            raise Exception(error_message)
 
     except FileNotFoundError:
-        return "Model file not found: edge-impulse-model.onnx", 500
+        error_message = f"File not found: {files}"
+        print(error_message)
+        raise Exception(error_message)
 
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
-    
-#@app.route("/add_module_desc2", methods=["GET", "POST"])
-def add_spectral_analysis_desc():
-    spec_id = None
-    for item in MODULES:
-        if item.get("name") == "spec":
-            spec_id = item.get("_id")
-            break
-    if not spec_id:
-        return "Spec ID not found", 404
-
-    url = f"http://172.17.0.1:3000/file/module/{spec_id}/upload"
-
-    data = {
-        "testailu[mountName]": "features.csv",
-        "testailu[method]": "POST",
-        "testailu[stage]": "output",
-        "testailu[output]": "image/jpg",
-        "testailu[mounts][0][name]": "accelerometer_data.csv",
-        "testailu[mounts][0][stage]": "execution",
-        "testailu[mounts][1][name]": "features.csv",
-        "testailu[mounts][1][stage]": "output",
-    }
-
-    try:
-        files = {
-            "raw_data.csv": (None, "undefined"),
-            "accelerometer_data.csv": (None, "undefined"),
-        }
-
-        response = requests.post(url, data=data, files=files)
-
-        if response.status_code == 200:
-            return f"Request succeeded: {response.text}", 200
-        else:
-            return f"Request failed with status code {response.status_code}: {response.text}", response.status_code
-
-    except FileNotFoundError as e:
-        return f"File not found: {str(e)}", 500
-
-    except Exception as e:
-        return f"An error occurred: {str(e)}", 500
-    
+        error_message = f"An error occurred while adding description for '{module_name}': {str(e)}"
+        print(error_message)
+        raise Exception(error_message)
 
 
-
-def add_save_data_desc():
-    save_id = None
-    for item in MODULES:
-        if item.get("name") == "save":
-            save_id = item.get("_id")
-            break
-    if not save_id:
-        return "Spec ID not found", 404
-
-    url = f"http://172.17.0.1:3000/file/module/{save_id}/upload"
-
-    data = {
-        "save_sensor_data[mountName]": "accelerometer_data.csv",
-        "save_sensor_data[method]": "GET",
-        "save_sensor_data[stage]": "output",
-        "save_sensor_data[output]": "image/jpg",
-        "alloc[param0]": "integer",
-        "alloc[output]": "integer",
-        "alloc[mountName]": "",
-        "alloc[method]": "GET",
-        "save_sensor_data[mounts][0][name]": "accelerometer_data.csv",
-        "save_sensor_data[mounts][0][stage]": "output",
-    }
-
-    try:
-        files = {
-            "accelerometer_data.csv": (None, "undefined"),
-        }
-
-        response = requests.post(url, data=data, files=files)
-
-        if response.status_code == 200:
-            return f"Request succeeded: {response.text}", 200
-        else:
-            return f"Request failed with status code {response.status_code}: {response.text}", response.status_code
-
-    except FileNotFoundError as e:
-        return f"File not found: {str(e)}", 500
-
-    except Exception as e:
-        return f"An error occurred: {str(e)}", 500
-
-
-
-#@app.route("/do_deployment", methods=["GET", "POST"])
 def do_deployment():
     global LAST_DEPLOYMENT
 
@@ -361,15 +303,6 @@ def do_deployment():
         if item.get("name") == "save":
             save_id = item.get("_id")
 
-    logger.info("-------------")
-    logger.info(device1)
-    logger.info(device2)
-    logger.info(device3)
-    logger.info(model_id)
-    logger.info(spec_id)
-    logger.info(save_id)
-    logger.info("-------------")
-
     payload = {
         "name": "asd1233",
         "proc0": f'{{"device":"{device3}","module":"{save_id}","func":"save_sensor_data"}}',
@@ -398,7 +331,7 @@ def do_deployment():
     except Exception as e:
         return f"An error occurred: {str(e)}", 500
 
-#@app.route("/deploy", methods=["GET", "POST"])
+
 def deploy():
     spec_id = None
     for item in MODULES:
@@ -423,6 +356,7 @@ def deploy():
     except Exception as e:
         return f"An error occurred: {str(e)}", 500
 
+
 def do_run():
     url = "http://172.17.0.1:3000/execute/" + LAST_DEPLOYMENT
 
@@ -441,6 +375,7 @@ def do_run():
 
     except Exception as e:
         return f"An error occurred: {str(e)}", 500
+
 
 @app.route("/manifest-request")
 def manifest_request():
@@ -464,6 +399,7 @@ def manifest_request():
             "status": "error",
             "message": f"Error communicating with orchestrator: {e}"
         }), 500
+
 
 def get_file_structure(directory):
     file_structure = {}
@@ -493,6 +429,7 @@ def upload_page():
     
     return render_template('index2.html', last_deployment=LAST_DEPLOYMENT)
 
+
 @app.route('/csv')
 def display_csv_as_text():
     csv_url = 'http://172.15.0.4:5000/module_results/model/probabilities.csv'
@@ -509,7 +446,8 @@ def display_csv_as_text():
         return f"[{', '.join(map(str, data))}]"
     
     except requests.exceptions.RequestException as e:
-        return f"Virhe ladattaessa CSV-tiedostoa: {e}", 500
+        return f"Error loading CSV file: {e}", 500
+
 
 @app.route('/get_text', methods=['GET'])
 def get_text():
@@ -527,4 +465,4 @@ def get_text():
         return f"[{', '.join(map(str, data))}]"
     
     except requests.exceptions.RequestException as e:
-        return f"Virhe ladattaessa CSV-tiedostoa: {e}", 500
+        return f"Error loading CSV file: {e}", 500

@@ -52,11 +52,11 @@ def download_model():
 
                 print("TensorFlow Lite (float32) model downloaded and saved as 'model.tflite'")
             else:
-                print(f"Error downloading model: {model_response.status_code}, {model_response.text}")
+                raise Exception(f"Error downloading model: {model_response.status_code}, {model_response.text}")
         else:
-            print("TensorFlow Lite (float32) model not found.")
+            raise Exception("TensorFlow Lite (float32) model not found.")
     else:
-        print(f"Error: {response.status_code}, {response.text}")
+        raise Exception(f"Error fetching download links: {response.status_code}, {response.text}")
 
 if __name__ == "__main__":
     download_model()

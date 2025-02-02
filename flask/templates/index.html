@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Run Pipeline</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
+
 <body>
     <button id="run-pipeline-button">Run Pipeline</button>
     <ul id="progress-log">
@@ -19,7 +21,7 @@
         <li id="upload_wasm_model">Upload spectral analysis module to orchestrator</li>
         <li id="upload_wasm_spec">Upload classifier module to orchestrator</li>
         <li id="upload_save_data">Upload save data module to orchestrator</li>
-        
+
         <li id="add_model_desc">Add classifier description</li>
         <li id="add_spectral_analysis_desc">Add spectral analysis description</li>
         <li id="add_save_data_desc">Add save data description</li>
@@ -44,6 +46,11 @@
                     $("#" + stepId).append(" ✅");
                 };
 
+                eventSource.addEventListener("fail", function (event) {
+                    const failedStepId = event.data;
+                    $("#" + failedStepId).append(" ❌");
+                });
+
                 eventSource.addEventListener("end", function (event) {
                     $("#response-message").text(event.data);
                     eventSource.close();
@@ -57,4 +64,5 @@
         });
     </script>
 </body>
+
 </html>
