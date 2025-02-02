@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, request, stream_with_context,
 from python_scripts.download_model import download_model
 from python_scripts.convert_to_onnx import convert_model
 import requests
+from requests.exceptions import HTTPError, ConnectionError, Timeout, RequestException
 import logging
 import subprocess
 from contextlib import contextmanager
@@ -275,13 +276,9 @@ def add_desc(module_name, files, data):
 def do_deployment():
     global LAST_DEPLOYMENT
 
-    from requests.exceptions import HTTPError, ConnectionError, Timeout, RequestException
-
     url = WASMIOT_ORCHESTRATOR_URL + "/file/manifest"
 
-    device1 = None
-    device2 = None
-    device3 = None
+    device1, device2, device3 = None, None, None
 
     for item in DEVICES:
         if item.get("name") == "device1":
@@ -291,9 +288,7 @@ def do_deployment():
         if item.get("name") == "device3":
             device3 = item.get("_id")
 
-    model_id = None
-    spec_id = None
-    save_id = None
+    model_id, spec_id, save_id = None, None, None
 
     for item in MODULES:
         if item.get("name") == "spec":
@@ -302,6 +297,11 @@ def do_deployment():
             model_id = item.get("_id")
         if item.get("name") == "save":
             save_id = item.get("_id")
+
+    if not all([device1, device2, device3, model_id, spec_id, save_id]):
+        error_message = "One or more required devices or modules not found."
+        logger.error(error_message)
+        raise Exception(error_message)
 
     payload = {
         "name": "asd1233",
@@ -318,87 +318,92 @@ def do_deployment():
     try:
         response = requests.post(url, json=payload)
 
-        logger.info("Response:")
-        logger.info(response)
-
         if response.status_code in [200, 201]:
             LAST_DEPLOYMENT = response.text.strip('"')
             return f"Request succeeded: {response.text}", response.status_code
         else:
-            return f"Request failed with status code {response.status_code}: {response.text}", response.status_code
-
+            error_message = f"Deployment failed: Status code {response.status_code}, {response.text}"
+            print(error_message)
+            raise Exception(error_message)
 
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
+        error_message = f"Error during deployment: {e}"
+        print(error_message)
+        raise Exception(error_message)
 
 
 def deploy():
-    spec_id = None
-    for item in MODULES:
-        if item.get("name") == "spec":
-            spec_id = item.get("_id")
-            break
+    if not LAST_DEPLOYMENT:
+        error_message = "No deployment ID found for deployment."
+        print(error_message)
+        raise Exception(error_message)
 
     url = "http://172.17.0.1:3000/file/manifest/" + LAST_DEPLOYMENT
+    data = {"id": LAST_DEPLOYMENT}    
 
-    data = {
-        "id": LAST_DEPLOYMENT,
-    }
-    
     try:
         response = requests.post(url, data=data)
 
         if response.status_code in [200, 201]:
+            print(f"Deployment was successful: {response.text}")
             return f"Request succeeded: {response.text}", response.status_code
         else:
-            return f"Request failed with status code {response.status_code}: {response.text}", response.status_code
+            error_message = f"Deployment failed: Status code {response.status_code}, {response.text}"
+            print(error_message)
+            raise Exception(error_message)
 
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
+        error_message = f"Deployment failed: {e}"
+        print(error_message)
+        raise Exception(error_message)
 
 
 def do_run():
-    url = "http://172.17.0.1:3000/execute/" + LAST_DEPLOYMENT
-
-    data = {
-        "id": LAST_DEPLOYMENT,
-    }
+    if not LAST_DEPLOYMENT:
+        error_message = "No deployment available to execute."
+        print(error_message)
+        raise Exception(error_message)
+    
+    url = f"http://172.17.0.1:3000/execute/{LAST_DEPLOYMENT}"
+    data = {"id": LAST_DEPLOYMENT}
     
     try:
         response = requests.post(url, data=data)
 
         if response.status_code in [200, 201]:
-            return f"Request succeeded: {response.text}", response.status_code
+            print(f"Execution was successful: {response.text}")
+            return f"Execution was successful: {response.text}", response.status_code
         else:
-            return f"Request failed with status code {response.status_code}: {response.text}", response.status_code
-
+            error_message = f"Execution failed: Status code {response.status_code}, {response.text}"
+            print(error_message)
+            raise Exception(error_message)
 
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
+        error_message = f"Execution failed: {e}"
+        print(error_message)
+        raise Exception(error_message)
 
 
 @app.route("/manifest-request")
 def manifest_request():
+    orchestrator_url = 'http://172.17.0.1:3000/file/manifest'
+    
     try:
-        orchestrator_url = 'http://172.17.0.1:3000/file/manifest'
         response = requests.get(orchestrator_url)
+        response.raise_for_status()
         
-        if response.status_code == 200:
-            try:
-                response_json = response.json()
-                return jsonify(response_json), 200
-            except ValueError:
-                return jsonify({"message": response.text}), 200
-        else:
-            return jsonify({
-                "status": "fail",
-                "message": f"Failed to reach orchestrator. Status code: {response.status_code}"
-            }), response.status_code
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Error communicating with orchestrator: {e}"
-        }), 500
+        try:
+            response_json = response.json()
+            return jsonify(response_json), 200
+        except ValueError:
+            error_message = "Failed to parse JSON from orchestrator response."
+            print(error_message)
+            raise Exception(error_message)
+
+    except requests.exceptions.RequestException as e:
+        error_message = f"Failed to communicate with orchestrator: {e}"
+        print(error_message)
+        raise Exception(error_message)
 
 
 def get_file_structure(directory):
@@ -410,6 +415,7 @@ def get_file_structure(directory):
             "files": files
         }
     return file_structure
+
 
 @app.route("/file-structure")
 def file_structure():
@@ -428,25 +434,6 @@ def upload_page():
             break
     
     return render_template('index2.html', last_deployment=LAST_DEPLOYMENT)
-
-
-@app.route('/csv')
-def display_csv_as_text():
-    csv_url = 'http://172.15.0.4:5000/module_results/model/probabilities.csv'
-    
-    try:
-        response = requests.get(csv_url)
-        response.raise_for_status()
-        
-        csv_content = response.text.splitlines()
-        csv_reader = csv.reader(csv_content)
-        
-        data = [float(cell) for row in csv_reader for cell in row]
-        
-        return f"[{', '.join(map(str, data))}]"
-    
-    except requests.exceptions.RequestException as e:
-        return f"Error loading CSV file: {e}", 500
 
 
 @app.route('/get_text', methods=['GET'])
