@@ -250,7 +250,7 @@ def add_desc(module_name, files, data):
         print(error_message)
         raise Exception(error_message)
 
-    url = f"http://172.17.0.1:3000/file/module/{module_id}/upload"
+    url = f"{WASMIOT_ORCHESTRATOR_URL}/file/module/{module_id}/upload"
 
     try:
         response = requests.post(url, files=files, data=data)
@@ -338,7 +338,7 @@ def deploy():
         print(error_message)
         raise Exception(error_message)
 
-    url = "http://172.17.0.1:3000/file/manifest/" + LAST_DEPLOYMENT
+    url = f"{WASMIOT_ORCHESTRATOR_URL}/file/manifest/{LAST_DEPLOYMENT}"
     data = {"id": LAST_DEPLOYMENT}    
 
     try:
@@ -363,8 +363,8 @@ def do_run():
         error_message = "No deployment available to execute."
         print(error_message)
         raise Exception(error_message)
-    
-    url = f"http://172.17.0.1:3000/execute/{LAST_DEPLOYMENT}"
+
+    url = f"{WASMIOT_ORCHESTRATOR_URL}/execute/{LAST_DEPLOYMENT}"
     data = {"id": LAST_DEPLOYMENT}
     
     try:
@@ -386,7 +386,7 @@ def do_run():
 
 @app.route("/manifest-request")
 def manifest_request():
-    orchestrator_url = 'http://172.17.0.1:3000/file/manifest'
+    orchestrator_url = f"{WASMIOT_ORCHESTRATOR_URL}/file/manifest"
     
     try:
         response = requests.get(orchestrator_url)
