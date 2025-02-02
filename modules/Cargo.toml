@@ -1,0 +1,11 @@
+[workspace]
+
+members=[
+    "wasm3_api",
+    "save_accelerometer_data",
+    "wasi_edge_impulse_onnx",
+    "rust_spectral_analysis"
+]
+
+[workspace.dependencies]
+wasm3_api = { path="wasm3_api" }

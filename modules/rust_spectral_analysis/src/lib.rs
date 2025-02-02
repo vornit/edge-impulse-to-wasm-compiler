@@ -232,7 +232,7 @@ pub fn testailu() -> i32 {
     let draw_graphs = false;
 
     // Read raw data from raw_data.csv
-    let raw_data_path = "raw_data.csv";
+    let raw_data_path = "accelerometer_data.csv";
     let file = File::open(raw_data_path);
     let Ok(file) = file else {
         eprintln!("Failed to open file: {}", raw_data_path);
@@ -299,7 +299,7 @@ pub fn testailu() -> i32 {
     );
 
     // Save features to a file in a single line with comma-separated values
-    let file_path = "accelerometer_data.csv";
+    let file_path = "features.csv";
     let Ok(mut output) = std::fs::File::create(file_path)
         else { return SaveFeaturesError::FileCreationFailed as i32 };
 

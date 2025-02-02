@@ -71,7 +71,7 @@ pub fn infer_predefined_paths() -> i32 {
     }
 
     // Call infer and handle results
-    match infer("model.onnx".to_owned(), "accelerometer_data.csv".to_owned()) {
+    match infer("model.onnx".to_owned(), "features.csv".to_owned()) {
         Ok(probabilities) => {
             println!("Probabilities: {:?}", probabilities);
 

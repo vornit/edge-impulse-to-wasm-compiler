@@ -15,8 +15,9 @@ import csv
 
 app = Flask(__name__, template_folder="../templates")
 
+logging.basicConfig(level=logging.DEBUG)  # Tämä varmistaa, että kaikki lokiviestit näkyvät
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 pull_orchestrator_devices()
 pull_orchestrator_modules()
@@ -41,10 +42,13 @@ def run_pipeline_progress():
             "convert_model": False,
             "run_rust_spectral_analysis": False,
             "run_rust_model": False,
+            "run_save_data": False,
             "upload_wasm_model": False,
             "upload_wasm_spec": False,
+            "upload_save_data": False,
             "add_model_desc": False,
             "add_spectral_analysis_desc": False,
+            "add_save_data_desc": False,
             "do_deployment": False,
             "deploy": False,
         }
@@ -58,19 +62,28 @@ def run_pipeline_progress():
             yield update_progress_log("convert_model")
             convert_model()
 
+
             yield update_progress_log("run_rust_spectral_analysis")
-            if not os.path.exists("modules/rust_spectral_analysis/target/wasm32-wasi/release/spectral_analysis.wasm"):
+            if not os.path.exists("modules/target/wasm32-wasi/release/spectral_analysis.wasm"):
                 run_rust_code("modules/rust_spectral_analysis")
 
             yield update_progress_log("run_rust_model")
-            if not os.path.exists("modules/wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm"):
+            if not os.path.exists("modules/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm"):
                 run_rust_code("modules/wasi_edge_impulse_onnx")
 
+            yield update_progress_log("run_save_data")
+            if not os.path.exists("modules/target/wasm32-wasi/release/save_accelerometer_data.wasm.wasm"):
+                run_rust_code("modules/save_accelerometer_data")
+
+
             yield update_progress_log("upload_wasm_model")
-            upload_wasm("model", "modules/wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm")
+            upload_wasm("model", "modules/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm")
 
             yield update_progress_log("upload_wasm_spec")
-            upload_wasm("spec", "modules/rust_spectral_analysis/target/wasm32-wasi/release/spectral_analysis.wasm")
+            upload_wasm("spec", "modules/target/wasm32-wasi/release/spectral_analysis.wasm")
+
+            yield update_progress_log("upload_save_data")
+            upload_wasm("save", "modules/target/wasm32-wasi/release/save_accelerometer_data.wasm")
 
             pull_orchestrator_modules()
 
@@ -79,6 +92,9 @@ def run_pipeline_progress():
 
             yield update_progress_log("add_spectral_analysis_desc")
             add_spectral_analysis_desc()
+
+            yield update_progress_log("add_save_data_desc")
+            add_save_data_desc()
 
             yield update_progress_log("do_deployment")
             do_deployment()
@@ -120,29 +136,29 @@ def deployments2():
 def index():        
     return render_template('index.html')
 
-@app.route("/run_pipeline", methods=["GET"])
-def run_pipeline():
-    try:
-        pull_orchestrator_devices()
-        download_model()
-        convert_model()
-        run_rust_code("modules/rust_spectral_analysis")
-        run_rust_code("modules/wasi_edge_impulse_onnx")
-        upload_wasm("model", "modules/wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm") # TODO: Make error handling!
-        upload_wasm("spec", "modules/rust_spectral_analysis/target/wasm32-wasi/release/spectral_analysis.wasm")
-        pull_orchestrator_modules()
-        add_model_desc()
-        add_spectral_analysis_desc()
-        do_deployment()
-        deploy()
-        pull_orchestrator_deployments()
-        #do_run()
-
-        return "Pipeline executed successfully!", 200
-    except Exception as e:
-        error_message = f"Pipeline execution failed: {e}"
-        app.logger.error(error_message, exc_info=True)
-        return jsonify({"status": "error", "message": error_message}), 500
+#@app.route("/run_pipeline", methods=["GET"])
+#def run_pipeline():
+#    try:
+#        pull_orchestrator_devices()
+#        download_model()
+#        convert_model()
+#        run_rust_code("modules/rust_spectral_analysis")
+#        run_rust_code("modules/wasi_edge_impulse_onnx")
+#        upload_wasm("model", "modules/wasi_edge_impulse_onnx/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm") # TODO: Make error handling!
+#        upload_wasm("spec", "modules/rust_spectral_analysis/target/wasm32-wasi/release/spectral_analysis.wasm")
+#        pull_orchestrator_modules()
+#        add_model_desc()
+#        add_spectral_analysis_desc()
+#        do_deployment()
+#        deploy()
+#        pull_orchestrator_deployments()
+#        #do_run()
+#
+#        return "Pipeline executed successfully!", 200
+#    except Exception as e:
+#        error_message = f"Pipeline execution failed: {e}"
+#        app.logger.error(error_message, exc_info=True)
+#        return jsonify({"status": "error", "message": error_message}), 500
 
 def run_rust_code(rust_project_path):
 
@@ -194,7 +210,7 @@ def add_model_desc():
         "infer_predefined_paths[output]": "image/jpg",
         "infer_predefined_paths[mounts][0][name]": "model.onnx",
         "infer_predefined_paths[mounts][0][stage]": "deployment",
-        "infer_predefined_paths[mounts][1][name]": "accelerometer_data.csv",
+        "infer_predefined_paths[mounts][1][name]": "features.csv",
         "infer_predefined_paths[mounts][1][stage]": "execution",
         "infer_predefined_paths[mounts][2][name]": "probabilities.csv",
         "infer_predefined_paths[mounts][2][stage]": "output",
@@ -237,13 +253,13 @@ def add_spectral_analysis_desc():
     url = f"http://172.17.0.1:3000/file/module/{spec_id}/upload"
 
     data = {
-        "testailu[mountName]": "accelerometer_data.csv",
+        "testailu[mountName]": "features.csv",
         "testailu[method]": "POST",
         "testailu[stage]": "output",
         "testailu[output]": "image/jpg",
-        "testailu[mounts][0][name]": "raw_data.csv",
+        "testailu[mounts][0][name]": "accelerometer_data.csv",
         "testailu[mounts][0][stage]": "execution",
-        "testailu[mounts][1][name]": "accelerometer_data.csv",
+        "testailu[mounts][1][name]": "features.csv",
         "testailu[mounts][1][stage]": "output",
     }
 
@@ -265,6 +281,53 @@ def add_spectral_analysis_desc():
 
     except Exception as e:
         return f"An error occurred: {str(e)}", 500
+    
+
+
+
+def add_save_data_desc():
+    save_id = None
+    for item in MODULES:
+        if item.get("name") == "save":
+            save_id = item.get("_id")
+            break
+    if not save_id:
+        return "Spec ID not found", 404
+
+    url = f"http://172.17.0.1:3000/file/module/{save_id}/upload"
+
+    data = {
+        "save_sensor_data[mountName]": "accelerometer_data.csv",
+        "save_sensor_data[method]": "GET",
+        "save_sensor_data[stage]": "output",
+        "save_sensor_data[output]": "image/jpg",
+        "alloc[param0]": "integer",
+        "alloc[output]": "integer",
+        "alloc[mountName]": "",
+        "alloc[method]": "GET",
+        "save_sensor_data[mounts][0][name]": "accelerometer_data.csv",
+        "save_sensor_data[mounts][0][stage]": "output",
+    }
+
+    try:
+        files = {
+            "accelerometer_data.csv": (None, "undefined"),
+        }
+
+        response = requests.post(url, data=data, files=files)
+
+        if response.status_code == 200:
+            return f"Request succeeded: {response.text}", 200
+        else:
+            return f"Request failed with status code {response.status_code}: {response.text}", response.status_code
+
+    except FileNotFoundError as e:
+        return f"File not found: {str(e)}", 500
+
+    except Exception as e:
+        return f"An error occurred: {str(e)}", 500
+
+
 
 #@app.route("/do_deployment", methods=["GET", "POST"])
 def do_deployment():
@@ -274,36 +337,56 @@ def do_deployment():
 
     url = WASMIOT_ORCHESTRATOR_URL + "/file/manifest"
 
-    raspi1 = None
-    raspi2 = None
+    device1 = None
+    device2 = None
+    device3 = None
 
     for item in DEVICES:
-        if item.get("name") == "debug-thingi1":
-            raspi1 = item.get("_id")
-        if item.get("name") == "debug-thingi2":
-            raspi2 = item.get("_id")
+        if item.get("name") == "device1":
+            device1 = item.get("_id")
+        if item.get("name") == "device2":
+            device2 = item.get("_id")
+        if item.get("name") == "device3":
+            device3 = item.get("_id")
 
     model_id = None
     spec_id = None
+    save_id = None
 
     for item in MODULES:
         if item.get("name") == "spec":
             spec_id = item.get("_id")
         if item.get("name") == "model":
             model_id = item.get("_id")
+        if item.get("name") == "save":
+            save_id = item.get("_id")
+
+    logger.info("-------------")
+    logger.info(device1)
+    logger.info(device2)
+    logger.info(device3)
+    logger.info(model_id)
+    logger.info(spec_id)
+    logger.info(save_id)
+    logger.info("-------------")
 
     payload = {
         "name": "asd1233",
-        "proc0": f'{{"device":"{raspi1}","module":"{spec_id}","func":"testailu"}}',
-        "proc1": f'{{"device":"{raspi2}","module":"{model_id}","func":"infer_predefined_paths"}}',
+        "proc0": f'{{"device":"{device3}","module":"{save_id}","func":"save_sensor_data"}}',
+        "proc1": f'{{"device":"{device1}","module":"{spec_id}","func":"testailu"}}',
+        "proc2": f'{{"device":"{device2}","module":"{model_id}","func":"infer_predefined_paths"}}',
         "sequence": [
-            {"device": raspi1, "module": spec_id, "func": "testailu"},
-            {"device": raspi2, "module": model_id, "func": "infer_predefined_paths"}
+            {"device": device3, "module": save_id, "func": "save_sensor_data"},
+            {"device": device1, "module": spec_id, "func": "testailu"},
+            {"device": device2, "module": model_id, "func": "infer_predefined_paths"},
         ]
     }
 
     try:
         response = requests.post(url, json=payload)
+
+        logger.info("Response:")
+        logger.info(response)
 
         if response.status_code in [200, 201]:
             LAST_DEPLOYMENT = response.text.strip('"')

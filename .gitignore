@@ -14,3 +14,4 @@ Cargo.lock
 wit
 open-api-description.json
 raw_data.csv
+/test_system/
