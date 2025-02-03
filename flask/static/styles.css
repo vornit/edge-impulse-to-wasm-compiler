@@ -1,0 +1,92 @@
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.container {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 400px;
+    text-align: center;
+}
+
+h2 {
+    margin-bottom: 20px;
+    color: #333333;
+}
+
+button {
+    padding: 12px 25px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+button:hover {
+    background-color: #218838;
+    transform: scale(1.05);
+}
+
+button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+#progress-log {
+    list-style: none;
+    padding: 0;
+    margin-top: 20px;
+    text-align: left;
+}
+
+#progress-log li {
+    padding: 10px;
+    margin: 8px 0;
+    background-color: #f9f9f9;
+    border-radius: 6px;
+    border-left: 5px solid #007bff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background-color 0.3s ease;
+}
+
+#progress-log li i {
+    visibility: hidden;
+    font-size: 18px;
+    width: 20px;
+    text-align: center;
+}
+
+#progress-log li.completed i {
+    color: #28a745;
+    visibility: visible;
+}
+
+#progress-log li.failed i {
+    color: #dc3545;
+    visibility: visible;
+}
+
+#progress-log li.processing i {
+    color: #007bff;
+    visibility: visible;
+}
+
+#response-message {
+    margin-top: 25px;
+    font-size: 15px;
+    color: #333;
+}

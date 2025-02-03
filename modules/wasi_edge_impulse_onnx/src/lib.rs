@@ -1,6 +1,6 @@
 use tract_onnx::{self as tonnx, prelude::{self as tp, Framework, InferenceModelExt, Tensor, tvec}};
 use std::fs::File;
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Write, BufReader};
 
 #[derive(Debug)]
 pub enum E {
@@ -63,35 +63,54 @@ pub fn infer(model_path: String, data_path: String) -> Result<Vec<f32>, E> {
     Ok(probabilities)
 }
 
+/// Load class names from a file (classes.txt) embedded into the binary.
+fn load_classes() -> Result<Vec<String>, E> {
+    const CLASSES: &str = include_str!("../../../models/classes.txt");
+    let classes: Vec<String> = CLASSES
+        .lines()
+        .map(|line| line.trim().to_string())
+        .collect();
+    Ok(classes)
+}
+
 #[no_mangle]
 pub fn infer_predefined_paths() -> i32 {
-    // Iterate through files in the current directory (for debugging)
-    for file in std::fs::read_dir(".").unwrap() {
-        eprintln!("{:?}", file);
-    }
+    // Load class names from the embedded string
+    let classes = match load_classes() {
+        Ok(cls) => cls,
+        Err(_) => {
+            eprintln!("Failed to load class names.");
+            return -10;
+        }
+    };
 
     // Call infer and handle results
     match infer("model.onnx".to_owned(), "features.csv".to_owned()) {
         Ok(probabilities) => {
-            println!("Probabilities: {:?}", probabilities);
+            if probabilities.len() != classes.len() {
+                eprintln!("Mismatch between number of classes and probabilities.");
+                return -11;
+            }
 
-            // Save probabilities to a file
+            // Save probabilities to CSV file
             let file_path = "probabilities.csv";
             let Ok(mut output) = File::create(file_path) else {
                 eprintln!("Failed to create file: {}", file_path);
                 return -8; // Return error code if file creation fails
             };
 
-            // Write probabilities to the file as comma-separated values
-            let data: String = probabilities
-                .iter()
-                .map(|p| format!("{:.4}", p))
-                .collect::<Vec<String>>()
-                .join(", ");
+            // Write CSV header
+            if writeln!(output, "class,probability").is_err() {
+                eprintln!("Failed to write header to file: {}", file_path);
+                return -9;
+            }
 
-            if output.write_all(data.as_bytes()).is_err() {
-                eprintln!("Failed to write to file: {}", file_path);
-                return -9; // Return error code if file write fails
+            // Write class names and probabilities
+            for (class, probability) in classes.iter().zip(probabilities.iter()) {
+                if writeln!(output, "{},{}", class, probability).is_err() {
+                    eprintln!("Failed to write data to file: {}", file_path);
+                    return -9; // Return error code if file write fails
+                }
             }
 
             // Find the index of the maximum probability

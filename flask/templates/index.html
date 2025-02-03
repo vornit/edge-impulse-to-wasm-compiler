@@ -6,59 +6,82 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Run Pipeline</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Linkataan ulkoinen CSS-tiedosto -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 
 <body>
-    <button id="run-pipeline-button">Run Pipeline</button>
-    <ul id="progress-log">
-        <li id="download_model">Download model</li>
-        <li id="convert_model">Convert model</li>
+    <div class="container">
+        <h2>Run Pipeline</h2>
+        <button id="run-pipeline-button">Run Pipeline</button>
+        <ul id="progress-log">
+            <li id="download_model"><i class="fas fa-spinner fa-spin"></i> Download model</li>
+            <li id="get_class_names"><i class="fas fa-spinner fa-spin"></i> Download class names</li>
+            <li id="convert_model"><i class="fas fa-spinner fa-spin"></i> Convert model</li>
 
-        <li id="run_rust_spectral_analysis">Convert Rust to Wasm (spectral analysis)</li>
-        <li id="run_rust_model">Convert Rust to Wasm (classifier)</li>
-        <li id="run_save_data">Convert Rust to Wasm (saving data)</li>
+            <li id="run_rust_spectral_analysis"><i class="fas fa-spinner fa-spin"></i> Convert Rust to Wasm (spectral
+                analysis)</li>
+            <li id="run_rust_model"><i class="fas fa-spinner fa-spin"></i> Convert Rust to Wasm (classifier)</li>
+            <li id="run_save_data"><i class="fas fa-spinner fa-spin"></i> Convert Rust to Wasm (saving data)</li>
 
-        <li id="upload_wasm_model">Upload spectral analysis module to orchestrator</li>
-        <li id="upload_wasm_spec">Upload classifier module to orchestrator</li>
-        <li id="upload_save_data">Upload save data module to orchestrator</li>
+            <li id="upload_wasm_model"><i class="fas fa-spinner fa-spin"></i> Upload classifier module to orchestrator
+            </li>
+            <li id="upload_wasm_spec"><i class="fas fa-spinner fa-spin"></i> Upload spectral analysis module to
+                orchestrator</li>
+            <li id="upload_save_data"><i class="fas fa-spinner fa-spin"></i> Upload save data module to orchestrator
+            </li>
 
-        <li id="add_model_desc">Add classifier description</li>
-        <li id="add_spectral_analysis_desc">Add spectral analysis description</li>
-        <li id="add_save_data_desc">Add save data description</li>
+            <li id="add_model_desc"><i class="fas fa-spinner fa-spin"></i> Add classifier description</li>
+            <li id="add_spectral_analysis_desc"><i class="fas fa-spinner fa-spin"></i> Add spectral analysis description
+            </li>
+            <li id="add_save_data_desc"><i class="fas fa-spinner fa-spin"></i> Add save data description</li>
 
-        <li id="do_deployment">Do deployment</li>
-        <li id="deploy">Deploy</li>
-    </ul>
-    <p id="response-message"></p>
+            <li id="do_deployment"><i class="fas fa-spinner fa-spin"></i> Do deployment</li>
+            <li id="deploy"><i class="fas fa-spinner fa-spin"></i> Deploy</li>
+        </ul>
+        <p id="response-message"></p>
+    </div>
 
     <script>
         $(document).ready(function () {
             $("#run-pipeline-button").click(function () {
-                $("#progress-log li").each(function () {
-                    $(this).text($(this).text().replace(" ✅", ""));
+                $("#progress-log li").removeClass('completed failed').each(function () {
+                    $(this).removeClass('processing')
+                        .find("i").removeClass('fa-check-circle fa-times-circle')
+                        .addClass('fa-spinner fa-spin')
+                        .css('visibility', 'visible');
                 });
+
                 $("#response-message").text("");
+                $("#run-pipeline-button").prop("disabled", true);
 
                 const eventSource = new EventSource("/run_pipeline_progress");
 
                 eventSource.onmessage = function (event) {
                     const stepId = event.data;
-                    $("#" + stepId).append(" ✅");
+                    $("#" + stepId).removeClass('processing').addClass('completed')
+                        .find("i").removeClass('fa-spinner fa-spin').addClass('fa-check-circle')
+                        .css('visibility', 'visible');
                 };
 
                 eventSource.addEventListener("fail", function (event) {
                     const failedStepId = event.data;
-                    $("#" + failedStepId).append(" ❌");
+                    $("#" + failedStepId).addClass('failed')
+                        .find("i").removeClass('fa-spinner fa-spin').addClass('fa-times-circle')
+                        .css('visibility', 'visible');
                 });
 
                 eventSource.addEventListener("end", function (event) {
                     $("#response-message").text(event.data);
                     eventSource.close();
+                    $("#run-pipeline-button").prop("disabled", false);
                 });
 
                 eventSource.addEventListener("error", function (event) {
                     $("#response-message").text("Error: " + event.data);
                     eventSource.close();
+                    $("#run-pipeline-button").prop("disabled", false);
                 });
             });
         });

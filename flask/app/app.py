@@ -1,8 +1,7 @@
 from flask import Flask, render_template, jsonify, request, stream_with_context, Response
-from python_scripts.download_model import download_model
+from python_scripts.download_model import download_model, get_class_names
 from python_scripts.convert_to_onnx import convert_model
 import requests
-from requests.exceptions import HTTPError, ConnectionError, Timeout, RequestException
 import logging
 import subprocess
 from contextlib import contextmanager
@@ -14,7 +13,7 @@ import csv
 
 #app.logger.info()
 
-app = Flask(__name__, template_folder="../templates")
+app = Flask(__name__, template_folder="../templates", static_folder="../static")
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -34,12 +33,18 @@ def update_progress_log(step):
     return f"data: {step}\n\n"
 
 
+@app.route("/execute_deployment", methods=["GET"])
+def execute_deployment():
+    return render_template('index3.html')
+
+
 @app.route("/run_pipeline_progress", methods=["GET"])
 def run_pipeline_progress():
     def generate():
         global progress_log
         progress_log = {
             "download_model": False,
+            "get_class_names": False,
             "convert_model": False,
             "run_rust_spectral_analysis": False,
             "run_rust_model": False,
@@ -60,28 +65,31 @@ def run_pipeline_progress():
             download_model()
             yield update_progress_log("download_model")
 
+            get_class_names()
+            yield update_progress_log("get_class_names")
+
             convert_model()
             yield update_progress_log("convert_model")
 
-            if not os.path.exists("modules/target/wasm32-wasi/release/spectral_analysis.wasm"):
+            if not os.path.exists("modules/target/wasm32-wasip1/release/spectral_analysis.wasm"):
                 run_rust_code("modules/rust_spectral_analysis")
             yield update_progress_log("run_rust_spectral_analysis")
 
-            if not os.path.exists("modules/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm"):
+            if not os.path.exists("modules/target/wasm32-wasip1/release/wasi_edge_impulse_onnx.wasm"):
                 run_rust_code("modules/wasi_edge_impulse_onnx")
             yield update_progress_log("run_rust_model")
 
-            if not os.path.exists("modules/target/wasm32-wasi/release/save_accelerometer_data.wasm"):
+            if not os.path.exists("modules/target/wasm32-wasip1/release/save_accelerometer_data.wasm"):
                 run_rust_code("modules/save_accelerometer_data")
             yield update_progress_log("run_save_data")
 
-            upload_wasm("model", "modules/target/wasm32-wasi/release/wasi_edge_impulse_onnx.wasm")
+            upload_wasm("model", "modules/target/wasm32-wasip1/release/wasi_edge_impulse_onnx.wasm")
             yield update_progress_log("upload_wasm_model")
 
-            upload_wasm("spec", "modules/target/wasm32-wasi/release/spectral_analysis.wasm")
+            upload_wasm("spec", "modules/target/wasm32-wasip1/release/spectral_analysis.wasm")
             yield update_progress_log("upload_wasm_spec")
 
-            upload_wasm("save", "modules/target/wasm32-wasi/release/save_accelerometer_data.wasm")
+            upload_wasm("save", "modules/target/wasm32-wasip1/release/save_accelerometer_data.wasm")
             yield update_progress_log("upload_save_data")
 
             pull_orchestrator_modules()
@@ -201,7 +209,8 @@ def index():
 
 def run_rust_code(rust_project_path):
     with change_directory(rust_project_path):
-        build_result = subprocess.run(["cargo", "build", "--target", "wasm32-wasi", "--release"], capture_output=True, text=True)
+        build_result = subprocess.run(["cargo", "build", "--target", "wasm32-wasip1", "--release"], capture_output=True, text=True)
+
         
         if build_result.returncode != 0:
             error_message = f"Rust build failed in {rust_project_path}:\n{build_result.stderr}"
@@ -357,12 +366,10 @@ def deploy():
         print(error_message)
         raise Exception(error_message)
 
-
+@app.route('/do_run', methods=['POST'])
 def do_run():
     if not LAST_DEPLOYMENT:
-        error_message = "No deployment available to execute."
-        print(error_message)
-        raise Exception(error_message)
+        return 'No deployment found.', 400
 
     url = f"{WASMIOT_ORCHESTRATOR_URL}/execute/{LAST_DEPLOYMENT}"
     data = {"id": LAST_DEPLOYMENT}
@@ -371,17 +378,18 @@ def do_run():
         response = requests.post(url, data=data)
 
         if response.status_code in [200, 201]:
-            print(f"Execution was successful: {response.text}")
-            return f"Execution was successful: {response.text}", response.status_code
+            probabilities = get_text()
+            
+            if isinstance(probabilities, tuple):
+                return probabilities
+
+            return probabilities, 200, {'Content-Type': 'text/plain'}
         else:
-            error_message = f"Execution failed: Status code {response.status_code}, {response.text}"
-            print(error_message)
-            raise Exception(error_message)
+            return f"Execution failed with status code: {response.status_code}", response.status_code
 
     except Exception as e:
-        error_message = f"Execution failed: {e}"
-        print(error_message)
-        raise Exception(error_message)
+        logger.error(f"Error in do_run: {e}")
+        return f"Server error: {e}", 500
 
 
 @app.route("/manifest-request")
@@ -400,29 +408,18 @@ def manifest_request():
             print(error_message)
             raise Exception(error_message)
 
-    except requests.exceptions.RequestException as e:
+
+    except Exception as e:
         error_message = f"Failed to communicate with orchestrator: {e}"
         print(error_message)
         raise Exception(error_message)
 
-
-def get_file_structure(directory):
-    file_structure = {}
-    for root, dirs, files in os.walk(directory):
-        rel_path = os.path.relpath(root, directory)
-        file_structure[rel_path] = {
-            "dirs": dirs,
-            "files": files
-        }
-    return file_structure
-
-
-@app.route("/file-structure")
+@app.route('/file-structure')
 def file_structure():
-    structure = get_file_structure("/app")
-    
-    return render_template("file_structure.html", structure=structure)
-
+    structure = {}
+    for root, dirs, files in os.walk('.'):
+        structure[root] = {'dirs': dirs, 'files': files}
+    return jsonify(structure)
 
 @app.route('/upload', methods=['GET'])
 def upload_page():
@@ -436,20 +433,23 @@ def upload_page():
     return render_template('index2.html', last_deployment=LAST_DEPLOYMENT)
 
 
-@app.route('/get_text', methods=['GET'])
 def get_text():
-    csv_url = 'http://172.15.0.4:5000/module_results/model/probabilities.csv'
-    
+    csv_url = 'http://172.15.0.22:5000/module_results/model/probabilities.csv'
     try:
         response = requests.get(csv_url)
         response.raise_for_status()
         
         csv_content = response.text.splitlines()
-        csv_reader = csv.reader(csv_content)
-        
-        data = [float(cell) for row in csv_reader for cell in row]
+        csv_reader = csv.DictReader(csv_content)
 
-        return f"[{', '.join(map(str, data))}]"
+        result = []
+        for row in csv_reader:
+            class_name = row['class']
+            probability = row['probability']
+            result.append(f"{class_name}: {probability}")
+
+        return f"Probabilities: {', '.join(result)}"
     
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
+        logger.error(f"Error loading CSV file from {csv_url}: {e}")
         return f"Error loading CSV file: {e}", 500

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Run Deployment</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <h2>Run Deployment</h2>
+        <button id="runButton" onclick="runDeployment()">Run</button>
+        <div id="status" class="status"></div>
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        function runDeployment() {
+            const runButton = document.getElementById('runButton');
+            const statusDiv = document.getElementById('status');
+            const resultDiv = document.getElementById('result');
+
+            runButton.disabled = true;
+            statusDiv.textContent = 'Deployment is running...';
+            resultDiv.textContent = '';
+
+            fetch('/do_run', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (response.status === 200) {
+                    statusDiv.textContent = 'Execution was successful.';
+                    return response.text();
+                } else {
+                    throw new Error(`Execution failed with status code: ${response.status}`);
+                }
+            })
+            .then(data => {
+                resultDiv.textContent = `${data}`;
+            })
+            .catch(error => {
+                statusDiv.textContent = 'Execution failed.';
+                resultDiv.textContent = error.message;
+            })
+            .finally(() => {
+                runButton.disabled = false;
+            });
+        }
+    </script>
+</body>
+
+</html>
