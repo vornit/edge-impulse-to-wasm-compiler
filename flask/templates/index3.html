@@ -32,24 +32,24 @@
                     'Content-Type': 'application/json'
                 }
             })
-            .then(response => {
-                if (response.status === 200) {
-                    statusDiv.textContent = 'Execution was successful.';
-                    return response.text();
-                } else {
-                    throw new Error(`Execution failed with status code: ${response.status}`);
-                }
-            })
-            .then(data => {
-                resultDiv.textContent = `${data}`;
-            })
-            .catch(error => {
-                statusDiv.textContent = 'Execution failed.';
-                resultDiv.textContent = error.message;
-            })
-            .finally(() => {
-                runButton.disabled = false;
-            });
+                .then(response => {
+                    if (response.status === 200) {
+                        return response.text();
+                    } else {
+                        throw new Error(`Execution failed with status code: ${response.status}`);
+                    }
+                })
+                .then(data => {
+                    resultDiv.textContent = `${data}`;
+                })
+                .catch(error => {
+                    statusDiv.textContent = 'Execution failed.';
+                    resultDiv.textContent = error.message;
+                })
+                .finally(() => {
+                    statusDiv.textContent = '';
+                    runButton.disabled = false;
+                });
         }
     </script>
 </body>

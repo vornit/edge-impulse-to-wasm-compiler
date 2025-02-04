@@ -16,7 +16,9 @@ body {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     width: 400px;
     text-align: center;
+    min-height: 200px;
 }
+
 
 h2 {
     margin-bottom: 20px;
@@ -32,6 +34,7 @@ button {
     cursor: pointer;
     font-size: 16px;
     transition: background-color 0.3s ease, transform 0.2s ease;
+    margin-bottom: 25px;
 }
 
 button:hover {
@@ -89,4 +92,13 @@ button:disabled {
     margin-top: 25px;
     font-size: 15px;
     color: #333;
+}
+
+.result {
+    white-space: pre-wrap;
+    font-family: monospace;
+}
+
+#runButton {
+    margin-bottom: 20px;
 }

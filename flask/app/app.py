@@ -385,7 +385,7 @@ def do_run():
 
             return probabilities, 200, {'Content-Type': 'text/plain'}
         else:
-            return f"Execution failed with status code: {response.status_code}", response.status_code
+            return f"Execution failed: Status code: {response.status_code}", response.status_code
 
     except Exception as e:
         logger.error(f"Error in do_run: {e}")
@@ -448,7 +448,7 @@ def get_text():
             probability = row['probability']
             result.append(f"{class_name}: {probability}")
 
-        return f"Probabilities: {', '.join(result)}"
+        return f"Probabilities:\n" + "\n".join(result)
     
     except Exception as e:
         logger.error(f"Error loading CSV file from {csv_url}: {e}")
